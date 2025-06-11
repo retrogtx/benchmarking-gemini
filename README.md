@@ -43,6 +43,93 @@ This framework provides tools to:
    ```
    Then edit `.env` to add your Google API key and other configuration.
 
+## ⚡ Quick Start Guide
+
+This guide walks through the complete end-to-end process for running the benchmarking system.
+
+### 1. Setup Environment Variables
+
+First, ensure your `.env` file is configured properly:
+
+```bash
+# Required
+GOOGLE_API_KEY=your_google_api_key_here
+MODEL_NAME=gemini-1.0-pro  # Or gemini-1.5-pro if you have quota
+
+# Optional
+MAX_OUTPUT_TOKENS=2048
+TEMPERATURE=0.2
+TOP_P=0.95
+TOP_K=40
+```
+
+### 2. Generate Debug Data
+
+For testing, generate sample data across different modalities:
+
+```bash
+# Generate test data for text and image modalities
+python scripts/preprocess.py --modalities text image --splits test --debug
+
+# If you want to generate data for all modalities and splits
+python scripts/preprocess.py --modalities text image audio --splits train val test --debug
+```
+
+This will create debug data files in the `outputs/processed/` directory.
+
+### 3. Run the Evaluation
+
+Run the evaluation pipeline using the generated debug data:
+
+```bash
+# Basic evaluation with text modality only
+python evaluation/runner.py --debug --data outputs/processed --split test --modalities text
+
+# Multimodal evaluation with text and image
+python evaluation/runner.py --debug --data outputs/processed --split test --modalities text image
+
+# Specify specific metrics to evaluate
+python evaluation/runner.py --debug --data outputs/processed --split test --modalities text image --metrics accuracy f1
+```
+
+### 4. View Results
+
+The evaluation results are saved in the `outputs/results/` directory as JSON files named with the pattern:
+`{model}_{split}_{timestamp}.json`
+
+You can examine the detailed results, or if you've run multiple evaluations, compare them:
+
+```bash
+# Compare results from different model runs (if you have multiple result files)
+python evaluation/comparer.py --results outputs/results/gemini_test_*.json
+```
+
+### 5. Debug with Jupyter Notebook
+
+For interactive debugging and visualization:
+
+```bash
+# Start Jupyter notebook
+jupyter notebook notebooks/debug_pipeline.ipynb
+```
+
+### 6. Using Real Data
+
+When you're ready to use real data instead of debug samples:
+
+1. Place your data files in `benchmark/data/` with the naming pattern `{split}.json` (e.g., `test.json`)
+2. Run preprocessing without the `--debug` flag:
+
+```bash
+python scripts/preprocess.py --modalities text image --splits test
+```
+
+3. Run evaluation on the processed real data:
+
+```bash
+python evaluation/runner.py --data outputs/processed --split test --modalities text image
+```
+
 ## 📊 Using the Framework
 
 ### Data Preparation
