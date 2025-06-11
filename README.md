@@ -54,7 +54,7 @@ First, ensure your `.env` file is configured properly:
 ```bash
 # Required
 GOOGLE_API_KEY=your_google_api_key_here
-MODEL_NAME=gemini-1.0-pro  # Or gemini-1.5-pro if you have quota
+MODEL_NAME=gemini  # IMPORTANT: Use "gemini" not "gemini-1.5-pro"
 
 # Optional
 MAX_OUTPUT_TOKENS=2048
@@ -72,25 +72,24 @@ For testing, generate sample data across different modalities:
 python scripts/preprocess.py --modalities text image --splits test --debug
 
 # If you want to generate data for all modalities and splits
-python scripts/preprocess.py --modalities text image audio --splits train val test --debug
+python scripts/preprocess.py --modalities text image audio --splits test --debug
 ```
 
-This will create debug data files in the `outputs/processed/` directory.
+⚠️ **IMPORTANT**: The `--debug` flag creates files with the naming pattern `debug_{modality}_{split}.json` (e.g., `debug_text_test.json`). These files are saved in the `outputs/processed/` directory.
 
 ### 3. Run the Evaluation
 
 Run the evaluation pipeline using the generated debug data:
 
 ```bash
-# Basic evaluation with text modality only
-python evaluation/runner.py --debug --data outputs/processed --split test --modalities text
+# CRITICAL: Must use --debug flag to match the debug file naming pattern
+python evaluation/runner.py --debug --data outputs/processed --split test --modalities text image --model gemini
 
-# Multimodal evaluation with text and image
-python evaluation/runner.py --debug --data outputs/processed --split test --modalities text image
-
-# Specify specific metrics to evaluate
-python evaluation/runner.py --debug --data outputs/processed --split test --modalities text image --metrics accuracy f1
+# Full example with all modalities
+python evaluation/runner.py --debug --data outputs/processed --split test --modalities text image audio --model gemini
 ```
+
+⚠️ **CRITICAL**: The `--debug` flag is **REQUIRED** when using data generated with the `--debug` flag in the preprocessing step. Without this flag, the evaluation will fail with "No samples found" errors.
 
 ### 4. View Results
 
@@ -124,11 +123,33 @@ When you're ready to use real data instead of debug samples:
 python scripts/preprocess.py --modalities text image --splits test
 ```
 
-3. Run evaluation on the processed real data:
+3. Run evaluation on the processed real data (without the `--debug` flag):
 
 ```bash
-python evaluation/runner.py --data outputs/processed --split test --modalities text image
+python evaluation/runner.py --data outputs/processed --split test --modalities text image --model gemini
 ```
+
+### 7. Troubleshooting
+
+#### "No samples found for evaluation" Error
+
+If you see this error, check:
+
+1. **File naming mismatch**: Make sure you're using the `--debug` flag consistently in both preprocessing and evaluation scripts.
+   - With `--debug`, files are named `debug_text_test.json`
+   - Without `--debug`, files are named `processed_text_test.json`
+
+2. **Verify files exist**: Check the contents of `outputs/processed/` directory to confirm the files were created:
+   ```bash
+   ls -la outputs/processed/
+   ```
+
+3. **Regenerate data**: If the files are missing, run the preprocessing script again:
+   ```bash
+   python scripts/preprocess.py --modalities text image audio --splits test --debug
+   ```
+
+4. **Check logs**: For more detailed error information, examine the log files in `outputs/logs/`
 
 ## 📊 Using the Framework
 
