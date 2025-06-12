@@ -1,0 +1,64 @@
+[
+  {
+    "id": "sample_text_001",
+    "input": {
+      "text": "What is the capital of France?"
+    },
+    "expected_output": "The capital of France is Paris.",
+    "metadata": {
+      "source": "debug",
+      "difficulty": "easy",
+      "category": "geography"
+    }
+  },
+  {
+    "id": "sample_text_002",
+    "input": {
+      "text": "Explain the concept of machine learning in simple terms."
+    },
+    "expected_output": "Machine learning is a type of artificial intelligence that allows computers to learn from data and make predictions or decisions without being explicitly programmed. It's like teaching a computer to recognize patterns in data, similar to how humans learn from experience.",
+    "metadata": {
+      "source": "debug",
+      "difficulty": "medium",
+      "category": "technology"
+    }
+  },
+  {
+    "id": "sample_text_003",
+    "input": {
+      "text": "What is the first law of thermodynamics?"
+    },
+    "expected_output": "The first law of thermodynamics states that energy cannot be created or destroyed, only transferred or converted from one form to another. It's also known as the law of conservation of energy.",
+    "metadata": {
+      "source": "debug",
+      "difficulty": "hard",
+      "category": "science"
+    }
+  },
+  {
+    "id": "sample_image_001",
+    "input": {
+      "text": "What does this image show?",
+      "image_path": "placeholder.jpg"
+    },
+    "expected_output": "The image shows a test pattern with a grid layout and text that says 'Test Image'.",
+    "metadata": {
+      "source": "debug",
+      "difficulty": "easy",
+      "category": "image_recognition"
+    }
+  },
+  {
+    "id": "sample_multimodal_001",
+    "input": {
+      "text": "What color is dominant in this image?",
+      "image_path": "placeholder.jpg"
+    },
+    "expected_output": "The dominant color in the image is blue, specifically a medium blue shade.",
+    "metadata": {
+      "source": "debug",
+      "difficulty": "medium",
+      "category": "multimodal"
+    }
+  }
+] 
