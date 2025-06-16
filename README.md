@@ -129,7 +129,45 @@ python scripts/preprocess.py --modalities text image --splits test
 python evaluation/runner.py --data outputs/processed --split test --modalities text image --model gemini
 ```
 
-### 7. Troubleshooting
+### 7. Using the MMMU Dataset
+
+This framework includes support for the Massive Multi-discipline Multimodal Understanding (MMMU) dataset.
+
+1. Download the MMMU dataset using the provided script:
+   ```bash
+   python scripts/download_mmmu.py
+   ```
+   This will download the dataset and save it in `benchmark/data/mmmu/` directory.
+
+2. Run the evaluation with the MMMU dataset:
+   ```bash
+   python evaluation/runner.py --dataset mmmu --model gemini --split test
+   ```
+
+   The script supports the following splits: `train`, `validation`, and `test`.
+
+3. For faster debugging, you can use the debug sample with fewer examples:
+   ```bash
+   python evaluation/runner.py --dataset mmmu --model gemini --split test --debug
+   ```
+
+### 8. Handling Dependencies
+
+If you encounter issues with package dependencies, particularly with `pyarrow`, try these solutions:
+
+1. **Pyarrow Compatibility**: If you're using Python 3.13+, the default pyarrow version may cause conflicts. Our `requirements.txt` handles this by making pyarrow optional. The `datasets` library will install a compatible version automatically.
+
+2. **Manual Installation**: If needed, you can manually install a compatible version:
+   ```bash
+   pip install 'pyarrow>=14.0.1,<15.0.0'
+   ```
+   
+3. **Datasets Library**: To ensure the MMMU dataset works correctly, make sure you have the datasets library properly installed:
+   ```bash
+   pip install datasets
+   ```
+
+### 9. Troubleshooting
 
 #### "No samples found for evaluation" Error
 
