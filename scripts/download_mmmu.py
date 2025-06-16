@@ -3,6 +3,7 @@ import sys
 import json
 from pathlib import Path
 from dotenv import load_dotenv
+from PIL import Image
 
 # Load environment variables from .env file
 load_dotenv()
@@ -149,16 +150,15 @@ def download_and_split_mmmu(output_dir: str = "benchmark/data/mmmu"):
             samples = []
             for idx, sample in enumerate(split_data):
                 try:
-                    # Convert to dict and handle potential encoding issues
+                    # Convert to dict to handle dataset's row object
                     sample_dict = dict(sample)
 
-                    # Remove image data if present, as it's not JSON serializable
-                    if "image" in sample_dict:
-                        # We can't save the raw image, so we remove it.
-                        # The loader will handle fetching images later.
-                        del sample_dict["image"]
+                    # Remove image objects, which are not JSON serializable.
+                    # This is more robust than just checking for an 'image' key.
+                    keys_to_remove = [key for key, value in sample_dict.items() if isinstance(value, Image.Image)]
+                    for key in keys_to_remove:
+                        del sample_dict[key]
                         
-                    # Replace problematic fields or convert types if needed
                     samples.append(sample_dict)
                     if idx > 0 and idx % 1000 == 0:
                         print(f"  Processed {idx}/{len(split_data)} samples")
@@ -199,11 +199,14 @@ def download_and_split_mmmu(output_dir: str = "benchmark/data/mmmu"):
             with open(debug_output_path, 'w', encoding='utf-8') as f:
                 for i in range(debug_count):
                     try:
-                        sample = dict(validation_samples[i])
-                        # Remove image data if present
-                        if "image" in sample:
-                            del sample["image"]
-                        json_line = json.dumps(sample, ensure_ascii=False)
+                        sample_dict = dict(validation_samples[i])
+                        
+                        # Remove image objects, which are not JSON serializable
+                        keys_to_remove = [key for key, value in sample_dict.items() if isinstance(value, Image.Image)]
+                        for key in keys_to_remove:
+                            del sample_dict[key]
+                            
+                        json_line = json.dumps(sample_dict, ensure_ascii=False)
                         f.write(json_line + '\n')
                     except Exception as e:
                         print(f"Error writing debug sample {i}, skipping: {e}")
