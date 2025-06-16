@@ -11,12 +11,10 @@ from PIL import Image
 import numpy as np
 import logging
 
-# Configure logging
 logging.basicConfig(level=logging.INFO, 
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Load environment variables
 load_dotenv()
 
 class GeminiModel:
@@ -64,8 +62,9 @@ class GeminiModel:
             logger.error(f"Error processing image {image_path}: {e}")
             raise
     
-    def _prepare_contents(self, 
-                         text: str = None, 
+    def _prepare_contents(self,
+                         text: str = None,
+                         images: List[Image.Image] = None,
                          image_paths: List[str] = None,
                          audio_paths: List[str] = None) -> List[Union[str, Dict]]:
         """Prepare multimodal content for the Gemini API."""
@@ -75,6 +74,10 @@ class GeminiModel:
         if text:
             contents.append(text)
             
+        # Add images if provided as objects
+        if images:
+            contents.extend(images)
+        
         # Add images if provided
         if image_paths:
             for img_path in image_paths:
@@ -93,8 +96,9 @@ class GeminiModel:
                 
         return contents
     
-    def generate(self, 
-                text: str = None, 
+    def generate(self,
+                text: str = None,
+                images: List[Image.Image] = None,
                 image_paths: List[str] = None,
                 audio_paths: List[str] = None,
                 **kwargs) -> Dict[str, Any]:
@@ -103,6 +107,7 @@ class GeminiModel:
         
         Args:
             text: Text prompt to send to the model
+            images: List of PIL Image objects
             image_paths: List of paths to image files
             audio_paths: List of paths to audio files
             **kwargs: Additional keyword arguments to override generation config
@@ -112,11 +117,11 @@ class GeminiModel:
                 - 'response': The model's response text
                 - 'metadata': Additional response metadata
         """
-        if not any([text, image_paths, audio_paths]):
-            raise ValueError("At least one input modality (text, image, audio) must be provided.")
+        if not any([text, images, image_paths, audio_paths]):
+            raise ValueError("At least one input modality (text, image, image_paths, audio) must be provided.")
         
         # Prepare the multimodal contents
-        contents = self._prepare_contents(text, image_paths, audio_paths)
+        contents = self._prepare_contents(text, images, image_paths, audio_paths)
         
         # Update generation config with any provided kwargs
         gen_config = {**self.generation_config, **kwargs}
@@ -139,7 +144,7 @@ class GeminiModel:
                     "generation_config": gen_config,
                     "input_modalities": {
                         "text": bool(text),
-                        "image": bool(image_paths),
+                        "image": bool(image_paths or images),
                         "audio": bool(audio_paths)
                     }
                 }
@@ -167,7 +172,7 @@ if __name__ == "__main__":
     # Generate a response
     response = model.generate(
         text="Describe what you see in this image in detail.",
-        image_paths=["path/to/image.jpg"]
+        images=[Image.new('RGB', (60, 30), color = 'red')] # Example with a dummy image
     )
     
     print(response["response"])

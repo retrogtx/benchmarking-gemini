@@ -18,6 +18,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from models import get_model, list_available_models
 from benchmark.loaders import get_loader
+from benchmark.loaders.mmmu_loader import load_mmmu_data, normalize_mmmu_sample
 from benchmark.metrics import get_metric, get_all_metrics
 
 # Configure logging
@@ -35,6 +36,11 @@ def parse_args():
     parser.add_argument('--model', '-m', type=str, required=False,
                         default=os.getenv('MODEL_NAME', 'gemini'),
                         help='Model to evaluate')
+    
+    parser.add_argument('--dataset', type=str, required=False,
+                        default='default',
+                        choices=['default', 'mmmu'],
+                        help='Dataset to use for evaluation.')
     
     parser.add_argument('--data', '-d', type=str, required=False,
                         default=os.getenv('PROCESSED_DATA_DIR', 'outputs/processed'),
@@ -109,38 +115,53 @@ def setup_environment(args):
 
 def load_evaluation_data(args):
     """Load data for evaluation."""
-    all_samples = []
-    
-    for modality in args.modalities:
-        try:
-            logger.info(f"Loading {modality} data")
+    if args.dataset == 'mmmu':
+        logger.info("Loading MMMU dataset.")
+        data_dir = "benchmark/data/mmmu"
+        if args.debug:
+            split_file = os.path.join(data_dir, "debug", "debug_sample.jsonl")
+        else:
+            split_file = os.path.join(data_dir, f"{args.split}.jsonl")
+
+        if not os.path.exists(split_file):
+            logger.error(f"MMMU data file not found at {split_file}. "
+                         f"Please run scripts/download_mmmu.py first.")
+            return []
+
+        raw_samples = load_mmmu_data(split_file)
+        all_samples = [normalize_mmmu_sample(s) for s in raw_samples]
+    else:
+        all_samples = []
+        for modality in args.modalities:
+            try:
+                logger.info(f"Loading {modality} data")
+                
+                # Get the appropriate loader
+                loader = get_loader(modality, data_dir=args.data, cache_dir=args.data)
+                
+                # Look for cached processed data
+                cache_files = [f for f in os.listdir(args.data) 
+                             if (f.startswith(f"processed_{modality}_") or 
+                                (args.debug and f.startswith(f"debug_{modality}_"))) 
+                             and f.endswith(".json")]
+                
+                # If we have a specific split, look for that
+                split_files = [f for f in cache_files if args.split in f]
+                target_files = split_files if split_files else cache_files
+                
+                if not target_files:
+                    logger.warning(f"No processed {modality} data found for split {args.split}")
+                    continue
+                
+                # Load data from each file
+                for filename in target_files:
+                    samples = loader.load_from_cache(filename)
+                    if samples:
+                        logger.info(f"Loaded {len(samples)} samples from {filename}")
+                        all_samples.extend(samples)
             
-            # Get the appropriate loader
-            loader = get_loader(modality, data_dir=args.data, cache_dir=args.data)
-            
-            # Look for cached processed data
-            cache_files = [f for f in os.listdir(args.data) 
-                         if (f.startswith(f"processed_{modality}_") or 
-                            (args.debug and f.startswith(f"debug_{modality}_"))) 
-                         and f.endswith(".json")]
-            
-            # If we have a specific split, look for that
-            split_files = [f for f in cache_files if args.split in f]
-            target_files = split_files if split_files else cache_files
-            
-            if not target_files:
-                logger.warning(f"No processed {modality} data found for split {args.split}")
-                continue
-            
-            # Load data from each file
-            for filename in target_files:
-                samples = loader.load_from_cache(filename)
-                if samples:
-                    logger.info(f"Loaded {len(samples)} samples from {filename}")
-                    all_samples.extend(samples)
-        
-        except Exception as e:
-            logger.error(f"Error loading {modality} data: {e}")
+            except Exception as e:
+                logger.error(f"Error loading {modality} data: {e}")
     
     # Limit sample count if specified
     if args.sample_count and args.sample_count < len(all_samples):
@@ -160,35 +181,54 @@ def prepare_model_inputs(samples):
     
     for sample in samples:
         sample_id = sample.get('id', 'unknown')
-        input_data = sample.get('input', {})
-        expected_output = sample.get('expected_output', '')
-        
-        # Build input dictionary
-        model_input = {
-            'text': None,
-            'image_paths': None,
-            'audio_paths': None
-        }
-        
-        # Track modalities present
-        modalities = []
-        
-        # Extract text input
-        if isinstance(input_data, dict) and 'text' in input_data:
-            model_input['text'] = input_data['text']
-            modalities.append('text')
-        
-        # Extract image paths
-        if isinstance(input_data, dict) and 'image_path' in input_data:
-            if input_data['image_path']:
-                model_input['image_paths'] = [input_data['image_path']]
-                modalities.append('image')
-        
-        # Extract audio paths
-        if isinstance(input_data, dict) and 'audio_path' in input_data:
-            if input_data['audio_path']:
-                model_input['audio_paths'] = [input_data['audio_path']]
-                modalities.append('audio')
+
+        # Handle MMMU sample format
+        if 'question' in sample and 'options' in sample:
+            # For MMMU, construct the prompt from question and options
+            options_str = "\n".join([f"{chr(65+i)}. {opt}" for i, opt in enumerate(sample['options'])])
+            prompt = f"{sample['question']}\n\n{options_str}\n\nAnswer:"
+            
+            model_input = {
+                'text': prompt,
+                'images': sample.get('images'),
+                'image_paths': None,
+                'audio_paths': None,
+            }
+            expected_output = sample.get('answer', '')
+            modalities = ['text', 'image'] if sample.get('images') else ['text']
+
+        # Handle default sample format
+        else:
+            input_data = sample.get('input', {})
+            expected_output = sample.get('expected_output', '')
+            
+            # Build input dictionary
+            model_input = {
+                'text': None,
+                'images': None,
+                'image_paths': None,
+                'audio_paths': None
+            }
+            
+            # Track modalities present
+            modalities = []
+            
+            # Extract text input
+            if isinstance(input_data, dict) and 'text' in input_data:
+                model_input['text'] = input_data['text']
+                modalities.append('text')
+            
+            # Extract image paths
+            if isinstance(input_data, dict) and 'image_path' in input_data:
+                if input_data['image_path']:
+                    model_input['image_paths'] = [input_data['image_path']]
+                    modalities.append('image')
+            
+            # Extract audio paths
+            if isinstance(input_data, dict) and 'audio_path' in input_data:
+                if input_data['audio_path']:
+                    model_input['audio_paths'] = [input_data['audio_path']]
+                    modalities.append('audio')
         
         inputs.append(model_input)
         expected_outputs.append(expected_output)
