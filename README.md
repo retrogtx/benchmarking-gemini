@@ -11,37 +11,133 @@ This framework provides tools to:
 3. 📈 **Compare results** between different models or model versions
 4. 🧪 **Process and normalize data** for consistent evaluation
 
-## 🚀 Getting Started
+## 🚀 Quick Start with MMMU Dataset
+
+The fastest way to get started is with the MMMU (Massive Multi-discipline Multimodal Understanding) dataset. This is a comprehensive benchmark that tests multimodal reasoning across 30+ academic disciplines.
 
 ### Prerequisites
 
 - Python 3.8+
 - Google API key with access to Gemini models
 
-### Installation
+### Step-by-Step Setup
 
-1. Clone this repository:
+1. **Clone the repository and navigate to it:**
    ```bash
    git clone https://github.com/retrogtx/benchmarking-gemini.git
    cd benchmarking-gemini
    ```
 
-2. Create and activate a virtual environment:
+2. **Create and activate a virtual environment:**
    ```bash
    python -m venv venv
    source venv/bin/activate  # On Windows: venv\Scripts\activate
    ```
 
-3. Install dependencies:
+3. **Install all required dependencies:**
    ```bash
    pip install -r requirements.txt
    ```
-
-4. Set up your environment variables:
+   
+   If you encounter pyarrow compatibility issues on newer Python versions:
    ```bash
-   cp .env.example .env
+   pip install "pyarrow>=14.0.1,<15.0.0"
    ```
-   Then edit `.env` to add your Google API key and other configuration.
+
+4. **Configure your API credentials:**
+   
+   Create a `.env` file in the project root (same directory as this README) with your Google API credentials:
+   ```bash
+   # Required - Get this from Google AI Studio
+   GOOGLE_API_KEY=your_google_api_key_here
+   MODEL_NAME=gemini-1.5-pro
+   
+   # Optional - Override defaults
+   MAX_OUTPUT_TOKENS=2048
+   TEMPERATURE=0.2
+   TOP_P=0.95
+   TOP_K=40
+   ```
+   
+   Alternatively, you can export these as environment variables:
+   ```bash
+   export GOOGLE_API_KEY="your_google_api_key_here"
+   export MODEL_NAME="gemini-1.5-pro"
+   ```
+
+5. **Download the MMMU dataset:**
+   ```bash
+   python scripts/download_mmmu.py
+   ```
+   
+   This will:
+   - Download the MMMU dataset from Hugging Face
+   - Process and save it to `benchmark/data/mmmu/`
+   - Create splits: `dev.jsonl` (15 samples), `validation.jsonl` (90 samples), `test.jsonl` (1143 samples)
+   - Generate a debug sample with 5 examples for quick testing
+
+6. **Run your first benchmark evaluation:**
+   
+   For a quick test with the debug sample (5 examples):
+   ```bash
+   python evaluation/runner.py --dataset mmmu --split test --model gemini --debug
+   ```
+   
+   For the full test split (1143 examples - will take longer and use more API calls):
+   ```bash
+   python evaluation/runner.py --dataset mmmu --split test --model gemini
+   ```
+   
+   For a subset to control API usage:
+   ```bash
+   python evaluation/runner.py --dataset mmmu --split test --model gemini --sample-count 50
+   ```
+
+7. **View your results:**
+   
+   Results are automatically saved to `outputs/results/` with filenames like:
+   `gemini_test_20250629_104215.json`
+   
+   To see what was generated:
+   ```bash
+   ls outputs/results/
+   ```
+   
+   Each results file contains:
+   - Individual sample predictions vs expected answers
+   - Aggregate metrics (accuracy, F1 score, etc.)
+   - Model configuration and timing information
+
+8. **Compare multiple runs (optional):**
+   
+   If you run multiple evaluations, compare them:
+   ```bash
+   python evaluation/comparer.py --results outputs/results/gemini_test_*.json
+   ```
+
+### Understanding Your Results
+
+The evaluation produces several key metrics:
+- **Accuracy**: Percentage of exactly correct answers
+- **F1 Score**: Balanced measure considering both precision and recall
+- **Multimodal Reasoning**: Custom metric for evaluating cross-modal understanding
+
+Results are saved in JSON format with detailed breakdowns per sample and aggregate statistics.
+
+### Troubleshooting
+
+**"No API key found" error:**
+- Ensure your `.env` file is in the project root directory
+- Verify your `GOOGLE_API_KEY` is valid and has Gemini access
+- Try exporting the variable directly: `export GOOGLE_API_KEY="your_key"`
+
+**"Dataset not found" error:**
+- Make sure `python scripts/download_mmmu.py` completed successfully
+- Check that files exist in `benchmark/data/mmmu/`
+
+**API rate limiting:**
+- Use `--sample-count N` to limit the number of samples processed
+- The framework includes automatic retry logic for transient API errors
 
 ## ⚡ Quick Start Guide
 
