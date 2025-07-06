@@ -10,6 +10,10 @@ import google.generativeai as genai
 from PIL import Image
 import numpy as np
 import logging
+import time
+import random
+from google.api_core.exceptions import ResourceExhausted
+from google.api_core.exceptions import TooManyRequests as GoogleTooManyRequests  
 
 logging.basicConfig(level=logging.INFO, 
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -18,7 +22,7 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 class GeminiModel:
-    """Wrapper for Google's Gemini model with multi-modal input support."""
+    """Wrapper for Google's Gemini model with multi-modal input support (default: Gemini 2.0 Flash-Lite)."""
     
     def __init__(self, model_name: str = None, api_key: str = None):
         """
@@ -32,7 +36,8 @@ class GeminiModel:
         if not self.api_key:
             raise ValueError("API key not provided and not found in environment.")
             
-        self.model_name = model_name or os.getenv("MODEL_NAME", "gemini-1.5-pro")
+        # Default to Gemini 2.0 Flash-Lite if not specified
+        self.model_name = model_name or os.getenv("MODEL_NAME", "gemini-2.0-flash-lite")
         
         # Configure the Gemini API
         genai.configure(api_key=self.api_key)
@@ -123,43 +128,70 @@ class GeminiModel:
         # Prepare the multimodal contents
         contents = self._prepare_contents(text, images, image_paths, audio_paths)
         
-        # Update generation config with any provided kwargs
         gen_config = {**self.generation_config, **kwargs}
         
-        try:
-            # Generate the response
-            response = self.model.generate_content(
-                contents=contents,
-                generation_config=gen_config
-            )
-            
-            # Extract the text response
-            response_text = response.text
-            
-            # Return the response with metadata
-            return {
-                "response": response_text,
-                "metadata": {
-                    "model": self.model_name,
-                    "generation_config": gen_config,
-                    "input_modalities": {
-                        "text": bool(text),
-                        "image": bool(image_paths or images),
-                        "audio": bool(audio_paths)
+        max_retries = int(os.getenv("MAX_RETRIES", 5))
+        backoff_base = float(os.getenv("BACKOFF_BASE", 1.0))  # seconds
+
+        attempt = 0
+        while True:
+            try:
+                response = self.model.generate_content(
+                    contents=contents,
+                    generation_config=gen_config
+                )
+
+                response_text = response.text
+
+                return {
+                    "response": response_text,
+                    "metadata": {
+                        "model": self.model_name,
+                        "generation_config": gen_config,
+                        "input_modalities": {
+                            "text": bool(text),
+                            "image": bool(image_paths or images),
+                            "audio": bool(audio_paths)
+                        }
                     }
                 }
-            }
-            
-        except Exception as e:
-            logger.error(f"Error generating response: {e}")
-            return {
-                "response": None,
-                "error": str(e),
-                "metadata": {
-                    "model": self.model_name,
-                    "generation_config": gen_config
+
+            except (ResourceExhausted, GoogleTooManyRequests) as rate_err:
+                error_msg = getattr(rate_err, "message", str(rate_err))
+
+                if attempt >= max_retries:
+                    logger.error(f"Rate/Quota limit hit and max retries exceeded. Last error: {error_msg}")
+                    raise
+
+                sleep_time = backoff_base * (2 ** attempt) + random.uniform(0, 0.5)
+                logger.warning(
+                    f"Rate/Quota limit encountered (attempt {attempt + 1}/{max_retries}). "
+                    f"Error: {error_msg} | Sleeping for {sleep_time:.2f}s before retrying."
+                )
+                time.sleep(sleep_time)
+                attempt += 1
+                continue
+            except Exception as e:
+                error_str = str(e).lower()
+                if ("429" in error_str or "rate limit" in error_str or "exhausted" in error_str) and attempt < max_retries:
+                    sleep_time = backoff_base * (2 ** attempt) + random.uniform(0, 0.5)
+                    logger.warning(
+                        f"Possible rate limit encountered (attempt {attempt + 1}/{max_retries}). "
+                        f"Error: {e}. Sleeping for {sleep_time:.2f}s before retrying."
+                    )
+                    time.sleep(sleep_time)
+                    attempt += 1
+                    continue
+
+                logger.error(f"Error generating response: {e}")
+                return {
+                    "response": None,
+                    "error": str(e),
+                    "metadata": {
+                        "model": self.model_name,
+                        "generation_config": gen_config
+                    }
                 }
-            }
 
 # Example usage
 if __name__ == "__main__":
